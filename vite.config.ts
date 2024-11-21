@@ -10,6 +10,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     minify: 'terser',
+    chunkSizeWarningLimit: 800,
     terserOptions: {
       compress: {
         drop_console: true,
@@ -20,7 +21,11 @@ export default defineConfig({
       plugins: [terser()],
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom'],
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-label', '@radix-ui/react-slot'],
+          'vendor-utils': ['class-variance-authority', 'clsx', 'tailwind-merge'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-forms': ['@hookform/resolvers', 'react-hook-form', 'zod'],
         },
       },
     },

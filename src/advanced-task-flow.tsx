@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { PlusCircle, Clock, Calendar, Bell, Search, LineChart as LineChartIcon, CheckSquare, Tag, MoreVertical, Timer, AlertCircle, Filter, Trash2, Sun, Moon, BookOpen, Briefcase, Paperclip, Users, Flag, Hash, FileText, Mic, Brain, Download, Upload, Focus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { PlusCircle, Clock, Calendar, Bell, Search, LineChart as LineChartIcon, CheckSquare, Tag, MoreVertical, Timer, AlertCircle, Filter, Trash2, Sun, Moon, BookOpen, Briefcase, Paperclip, Users, Flag, Hash, FileText, Mic, Brain, Download, Upload, Focus, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react'
 import { Button } from "./components/ui/button"
 import { Input } from "./components/ui/input"
 import { Textarea } from "./components/ui/textarea"
@@ -62,6 +62,9 @@ interface Task {
   startTime?: string;
   completedAt?: string;
   category?: string;
+  color?: string;
+  subtasks: Subtask[];
+  progress: number;
 }
 
 interface Subtask {
@@ -82,7 +85,10 @@ interface Note {
 }
 
 export default function AdvancedTaskFlow() {
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    const savedTasks = localStorage.getItem("tasks")
+    return savedTasks ? JSON.parse(savedTasks) : []
+  })
   const [notes, setNotes] = useState<Note[]>(() => {
     const savedNotes = localStorage.getItem("notes")
     return savedNotes ? JSON.parse(savedNotes) : []
@@ -110,7 +116,7 @@ export default function AdvancedTaskFlow() {
     description: '',
     priority: 'medium',
     category: '',
-    tags: [],
+    color: 'bg-card',
     dueDate: '',
     timeEstimate: 0,
     subtasks: [],
@@ -137,6 +143,15 @@ export default function AdvancedTaskFlow() {
     'Archive'
   ]
 
+  const taskColors = [
+    { name: 'Default', value: 'bg-card' },
+    { name: 'Red', value: 'bg-red-100 dark:bg-red-900/20' },
+    { name: 'Green', value: 'bg-green-100 dark:bg-green-900/20' },
+    { name: 'Blue', value: 'bg-blue-100 dark:bg-blue-900/20' },
+    { name: 'Yellow', value: 'bg-yellow-100 dark:bg-yellow-900/20' },
+    { name: 'Purple', value: 'bg-purple-100 dark:bg-purple-900/20' },
+  ]
+
   useEffect(() => {
     const root = window.document.documentElement
     root.classList.toggle('dark', isDarkMode)
@@ -150,6 +165,10 @@ export default function AdvancedTaskFlow() {
   useEffect(() => {
     localStorage.setItem("notes", JSON.stringify(notes))
   }, [notes])
+
+  useEffect(() => {
+    localStorage.setItem("tasks", JSON.stringify(tasks))
+  }, [tasks])
 
   // Function to update time remaining
   const updateTimeRemaining = (taskId: string) => {
@@ -198,7 +217,8 @@ export default function AdvancedTaskFlow() {
       completed: false,
       priority: task.priority || 'medium',
       timeRemaining: timeInSeconds,
-      startTime: new Date().toISOString()
+      startTime: new Date().toISOString(),
+      color: task.color || 'bg-card',
     }
 
     setTasks(prev => [newTask, ...prev])
@@ -236,7 +256,7 @@ export default function AdvancedTaskFlow() {
       description: '',
       priority: 'medium',
       category: '',
-      tags: [],
+      color: 'bg-card',
       dueDate: '',
       timeEstimate: 0,
       subtasks: [],
@@ -391,7 +411,14 @@ export default function AdvancedTaskFlow() {
     drag(drop(ref))
 
     return (
-      <div ref={ref} className={`border rounded-xl p-4 hover:shadow-md transition-shadow ${isDragging ? 'opacity-50' : ''}`}>
+      <div
+        ref={ref}
+        className={cn(
+          "group relative rounded-xl border p-4 shadow-lg transition-all duration-200 hover:shadow-lg hover:translate-y-[-1px]",
+          task.color || "bg-card",
+          "backdrop-blur-md bg-opacity-90"
+        )}
+      >
         <div className="flex items-start justify-between">
           <div className="flex items-start space-x-3">
             <Checkbox
@@ -574,123 +601,159 @@ export default function AdvancedTaskFlow() {
                         New Task
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent className="sm:max-w-[600px] w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>{editingTask ? 'Edit Task' : 'Add New Task'}</DialogTitle>
-                        <DialogDescription>
-                          Fill in the details for your task.
-                        </DialogDescription>
+                        <DialogTitle className="text-xl font-semibold">
+                          {editingTask ? 'Edit Task' : 'Create New Task'}
+                        </DialogTitle>
                       </DialogHeader>
-                      <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-6">
-                        <div className="flex items-center space-x-2">
-                          <Input
-                            name="title"
-                            placeholder="Task title"
-                            value={newTask.title}
-                            onChange={handleInputChange}
-                          />
-                          <Button onClick={() => handleVoiceInput('title')} disabled={isRecording}>
-                            <Mic className="h-5 w-5" />
-                          </Button>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Textarea
-                            name="description"
-                            placeholder="Task description"
-                            value={newTask.description}
-                            onChange={handleInputChange}
-                          />
-                          <Button onClick={() => handleVoiceInput('description')} disabled={isDescriptionRecording}>
-                            <Mic className="h-5 w-5" />
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex flex-col space-y-1.5">
-                            <Label htmlFor="dueDate">Due Date</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant={"outline"}
-                                  className={`w-full justify-start text-left font-normal ${!newTask.dueDate && "text-muted-foreground"}`}
-                                >
-                                  <Calendar className="mr-2 h-4 w-4" />
-                                  {newTask.dueDate ? format(new Date(newTask.dueDate), "PPP") : <span>Pick a date</span>}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <CalendarComponent
-                                  mode="single"
-                                  selected={newTask.dueDate ? new Date(newTask.dueDate) : undefined}
-                                  onSelect={(date: Date | undefined) => setNewTask(prev => ({ 
-                                    ...prev, 
-                                    dueDate: date?.toISOString() 
-                                  }))}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <div className="flex flex-col space-y-1.5">
-                            <Label htmlFor="timeEstimate">Time Estimate (minutes)</Label>
+                      <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-1 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="title">Title</Label>
                             <Input
-                              id="timeEstimate"
-                              name="timeEstimate"
-                              type="number"
-                              value={newTask.timeEstimate}
+                              id="title"
+                              name="title"
+                              value={newTask.title}
                               onChange={handleInputChange}
+                              className="w-full"
+                              placeholder="Enter task title"
                             />
                           </div>
-                        </div>
-                        <div className="flex flex-col space-y-1.5">
-                          <Label htmlFor="priority">Priority</Label>
-                          <Select
-                            value={newTask.priority}
-                            onValueChange={(value) => setNewTask(prev => ({ ...prev, priority: value }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select priority" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="low">Low</SelectItem>
-                              <SelectItem value="medium">Medium</SelectItem>
-                              <SelectItem value="high">High</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex flex-col space-y-1.5">
-                          <Label htmlFor="category">Category</Label>
-                          <Select
-                            value={newTask.category}
-                            onValueChange={(value) => setNewTask(prev => ({ ...prev, category: value }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="work">Work</SelectItem>
-                              <SelectItem value="personal">Personal</SelectItem>
-                              <SelectItem value="study">Study</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label htmlFor="subtasks">Subtasks</Label>
-                          {newTask.subtasks.map((subtask, index) => (
-                            <div key={subtask.id} className="flex items-center mt-2 space-x-2">
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="description">Description</Label>
+                            <Textarea
+                              id="description"
+                              name="description"
+                              value={newTask.description}
+                              onChange={handleInputChange}
+                              className="w-full min-h-[100px]"
+                              placeholder="Enter task description"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="priority">Priority</Label>
+                              <Select
+                                name="priority"
+                                value={newTask.priority}
+                                onValueChange={(value) => handleInputChange({ target: { name: 'priority', value } })}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select priority" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="low">Low</SelectItem>
+                                  <SelectItem value="medium">Medium</SelectItem>
+                                  <SelectItem value="high">High</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="category">Category</Label>
+                              <Select
+                                name="category"
+                                value={newTask.category}
+                                onValueChange={(value) => handleInputChange({ target: { name: 'category', value } })}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="work">Work</SelectItem>
+                                  <SelectItem value="personal">Personal</SelectItem>
+                                  <SelectItem value="shopping">Shopping</SelectItem>
+                                  <SelectItem value="health">Health</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="dueDate">Due Date</Label>
                               <Input
-                                value={subtask.text}
-                                onChange={(e) => handleSubtaskChange(subtask.id, 'text', e.target.value)}
-                                placeholder={`Subtask ${index + 1}`}
+                                id="dueDate"
+                                name="dueDate"
+                                type="datetime-local"
+                                value={newTask.dueDate}
+                                onChange={handleInputChange}
+                                className="w-full"
                               />
                             </div>
-                          ))}
-                          <Button type="button" onClick={handleAddSubtask} variant="outline" className="mt-2">
-                            Add Subtask
-                          </Button>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="color">Color</Label>
+                              <Select
+                                name="color"
+                                value={newTask.color}
+                                onValueChange={(value) => handleInputChange({ target: { name: 'color', value } })}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select color" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="bg-card">Default</SelectItem>
+                                  <SelectItem value="bg-blue-50">Blue</SelectItem>
+                                  <SelectItem value="bg-green-50">Green</SelectItem>
+                                  <SelectItem value="bg-yellow-50">Yellow</SelectItem>
+                                  <SelectItem value="bg-red-50">Red</SelectItem>
+                                  <SelectItem value="bg-purple-50">Purple</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Subtasks</Label>
+                            <div className="space-y-2">
+                              {newTask.subtasks.map((subtask, index) => (
+                                <div key={subtask.id} className="flex items-center gap-2">
+                                  <Input
+                                    value={subtask.text}
+                                    onChange={(e) => handleSubtaskChange(subtask.id, 'text', e.target.value)}
+                                    placeholder={`Subtask ${index + 1}`}
+                                    className="flex-1"
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setNewTask(prev => ({
+                                        ...prev,
+                                        subtasks: prev.subtasks.filter(st => st.id !== subtask.id)
+                                      }))
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="mt-2"
+                                onClick={handleAddSubtask}
+                              >
+                                <PlusCircle className="h-4 w-4 mr-2" />
+                                Add Subtask
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <DialogFooter>
-                        <Button onClick={handleAddTask}>{editingTask ? 'Update Task' : 'Add Task'}</Button>
+                      <DialogFooter className="sm:justify-end">
+                        <Button variant="ghost" onClick={() => setIsDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="button" onClick={handleAddTask}>
+                          {editingTask ? 'Save Changes' : 'Create Task'}
+                        </Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -766,113 +829,112 @@ export default function AdvancedTaskFlow() {
               <div className="flex-1">
                 <div className="container mx-auto p-6">
                   {/* Notes Section */}
-                  <div className="mb-8 bg-gradient-to-b from-background to-background/50 p-6 rounded-xl backdrop-blur-sm shadow-lg border border-border/50">
-                    <div className="flex flex-col space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/50 bg-clip-text text-transparent">
-                            My Notes
-                          </h2>
-                          <p className="text-muted-foreground mt-1">Capture your thoughts and ideas</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <Select
-                            value={notesView}
-                            onValueChange={(value: 'grid' | 'list') => setNotesView(value)}
-                          >
-                            <SelectTrigger className="w-[120px]">
-                              <SelectValue placeholder="View" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="grid">Grid View</SelectItem>
-                              <SelectItem value="list">List View</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          
-                          <Select
-                            value={notesSortBy}
-                            onValueChange={(value: 'date' | 'priority' | 'category') => setNotesSortBy(value)}
-                          >
-                            <SelectTrigger className="w-[120px]">
-                              <SelectValue placeholder="Sort by" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="date">Date</SelectItem>
-                              <SelectItem value="priority">Priority</SelectItem>
-                              <SelectItem value="category">Category</SelectItem>
-                            </SelectContent>
-                          </Select>
-
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div className="flex flex-col sm:flex-row items-start gap-4">
+                        <h2 className="text-2xl font-semibold">My Notes</h2>
+                        <div className="flex items-center gap-2">
                           <Button
-                            onClick={() => {
-                              setEditingNote({
-                                id: '',
-                                title: '',
-                                content: '',
-                                date: new Date().toLocaleDateString(),
-                                color: 'bg-card',
-                                category: 'Personal',
-                                priority: 'medium',
-                                tags: []
-                              })
-                              setNoteDialogOpen(true)
-                            }}
-                            className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-300"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setNotesView('grid')}
+                            className={cn(
+                              "h-8 w-8",
+                              notesView === 'grid' && "bg-primary/10 text-primary"
+                            )}
                           >
-                            <PlusCircle className="h-5 w-5" />
-                            Add Note
+                            <LayoutGrid className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setNotesView('list')}
+                            className={cn(
+                              "h-8 w-8",
+                              notesView === 'list' && "bg-primary/10 text-primary"
+                            )}
+                          >
+                            <List className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
+                      <Button
+                        onClick={() => {
+                          setEditingNote({
+                            id: '',
+                            title: '',
+                            content: '',
+                            date: new Date().toLocaleDateString(),
+                            color: 'bg-card',
+                            category: 'Personal',
+                            priority: 'medium',
+                            tags: []
+                          })
+                          setNoteDialogOpen(true)
+                        }}
+                        className="w-full sm:w-auto gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                        Add Note
+                      </Button>
+                    </div>
 
-                      <div className={cn(
-                        "mt-6 gap-4",
-                        notesView === 'grid' 
-                          ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
-                          : "flex flex-col"
-                      )}>
-                        {notes.map((note) => (
-                          <div
-                            key={note.id}
-                            className={cn(
-                              "group relative rounded-xl border p-4 shadow-lg transition-all duration-300",
-                              note.color || "bg-card",
-                              "hover:shadow-xl hover:scale-[1.02] hover:-translate-y-1",
-                              "backdrop-blur-md bg-opacity-90",
-                              notesView === 'list' && "flex items-start gap-4"
-                            )}
-                          >
+                    <div className={cn(
+                      "mt-6",
+                      notesView === 'grid'
+                        ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"
+                        : "flex flex-col space-y-4"
+                    )}>
+                      {notes.map((note) => (
+                        <div
+                          key={note.id}
+                          className={cn(
+                            "group relative rounded-xl border p-5 shadow-sm transition-all duration-200",
+                            "hover:shadow-md hover:border-primary/20",
+                            note.color || "bg-card",
+                            "bg-opacity-95",
+                            notesView === 'list' && "flex items-start gap-6"
+                          )}
+                        >
+                          <div className={cn(
+                            "flex-1 h-full",
+                            notesView === 'list' ? "flex items-start gap-6" : "flex flex-col"
+                          )}>
                             <div className={cn(
                               "flex-1",
-                              notesView === 'list' && "flex items-center gap-4"
+                              notesView === 'list' && "max-w-[70%]"
                             )}>
-                              <div className="mb-2">
-                                <div className="flex items-center gap-2 mb-3">
-                                  {note.priority && (
-                                    <span className={cn(
-                                      "px-2 py-1 rounded-full text-xs font-medium",
-                                      note.priority === 'high' && "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400",
-                                      note.priority === 'medium' && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400",
-                                      note.priority === 'low' && "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-                                    )}>
-                                      {note.priority}
-                                    </span>
-                                  )}
-                                  {note.category && (
-                                    <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-xs font-medium">
-                                      {note.category}
-                                    </span>
-                                  )}
-                                </div>
-                                <h3 className="text-lg font-semibold leading-tight mb-2">{note.title}</h3>
-                                <p className="mb-3 text-sm text-muted-foreground line-clamp-3">{note.content}</p>
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
+                                {note.priority && (
+                                  <span className={cn(
+                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-colors",
+                                    note.priority === 'high' && "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400",
+                                    note.priority === 'medium' && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400",
+                                    note.priority === 'low' && "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                                  )}>
+                                    {note.priority}
+                                  </span>
+                                )}
+                                {note.category && (
+                                  <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-full text-xs font-medium">
+                                    {note.category}
+                                  </span>
+                                )}
                               </div>
+                              <h3 className="text-lg font-semibold leading-tight mb-2.5 line-clamp-2">{note.title}</h3>
+                              <p className="mb-4 text-sm text-muted-foreground line-clamp-3">{note.content}</p>
+                            </div>
+                            
+                            <div className={cn(
+                              "mt-auto",
+                              notesView === 'list' && "flex-1"
+                            )}>
                               {note.tags && note.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                <div className="flex flex-wrap gap-1.5 mb-4">
                                   {note.tags.map((tag, index) => (
                                     <span
                                       key={index}
-                                      className="bg-primary/5 text-primary text-xs px-2 py-0.5 rounded-full font-medium"
+                                      className="bg-primary/5 hover:bg-primary/10 text-primary text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
                                     >
                                       #{tag}
                                     </span>
@@ -881,11 +943,11 @@ export default function AdvancedTaskFlow() {
                               )}
                               <div className="flex items-center justify-between text-xs text-muted-foreground">
                                 <p>{note.date}</p>
-                                <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                <div className="flex gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 hover:bg-background/80"
+                                    className="h-8 w-8 rounded-lg hover:bg-primary/5 hover:text-primary"
                                     onClick={() => handleEditNote(note)}
                                   >
                                     <FileText className="h-4 w-4" />
@@ -893,7 +955,7 @@ export default function AdvancedTaskFlow() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+                                    className="h-8 w-8 rounded-lg hover:bg-destructive/10 hover:text-destructive"
                                     onClick={() => handleDeleteNote(note.id)}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -902,38 +964,38 @@ export default function AdvancedTaskFlow() {
                               </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
-
-                      {notes.length === 0 && (
-                        <div className="mt-12 text-center">
-                          <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-                            <FileText className="h-10 w-10 text-primary" />
-                          </div>
-                          <h3 className="mt-4 text-lg font-semibold">No notes yet</h3>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            Start capturing your thoughts and ideas
-                          </p>
-                          <Button
-                            onClick={() => {
-                              setEditingNote({
-                                id: '',
-                                title: '',
-                                content: '',
-                                date: new Date().toLocaleDateString(),
-                                color: 'bg-card',
-                                tags: []
-                              })
-                              setNoteDialogOpen(true)
-                            }}
-                            className="mt-4"
-                            variant="outline"
-                          >
-                            Create your first note
-                          </Button>
                         </div>
-                      )}
+                      ))}
                     </div>
+
+                    {notes.length === 0 && (
+                      <div className="mt-12 text-center">
+                        <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+                          <FileText className="h-10 w-10 text-primary" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold">No notes yet</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Start capturing your thoughts and ideas
+                        </p>
+                        <Button
+                          onClick={() => {
+                            setEditingNote({
+                              id: '',
+                              title: '',
+                              content: '',
+                              date: new Date().toLocaleDateString(),
+                              color: 'bg-card',
+                              tags: []
+                            })
+                            setNoteDialogOpen(true)
+                          }}
+                          className="mt-4"
+                          variant="outline"
+                        >
+                          Create your first note
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Tasks Section */}
@@ -1138,14 +1200,14 @@ export default function AdvancedTaskFlow() {
 
       {/* Note Dialog */}
       <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
-        <DialogContent className="sm:max-w-[525px]">
+        <DialogContent className="sm:max-w-[525px] h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{editingNote ? "Edit Note" : "Create Note"}</DialogTitle>
             <DialogDescription>
               {editingNote ? "Edit your note details below." : "Create a new note with a title and content."}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 overflow-y-auto flex-grow pr-2">
             <div className="grid gap-2">
               <Label htmlFor="title">Title</Label>
               <Input
