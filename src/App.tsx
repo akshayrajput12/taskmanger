@@ -1,7 +1,7 @@
 import React from "react";
 import AdvancedTaskFlow from "./advanced-task-flow";
 
-const App = () => {
+const App: React.FC = () => {
   return (
     <div>
       <AdvancedTaskFlow />
