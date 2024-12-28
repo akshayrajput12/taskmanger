@@ -207,15 +207,13 @@ const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
       // Convert camelCase to snake_case for the database
       const taskUpdates = {
         ...updates,
-        due_date: updates.dueDate,
-        time_remaining: updates.timeRemaining,
-        start_time: updates.startTime,
-        completed_at: updates.completedAt,
+        due_date: updates.dueDate ? new Date(updates.dueDate).toISOString() : null,
+        start_time: updates.startTime ? new Date(updates.startTime).toISOString() : null,
+        completed_at: updates.completedAt ? new Date(updates.completedAt).toISOString() : null,
       }
 
       // Remove camelCase properties
       delete taskUpdates.dueDate;
-      delete taskUpdates.timeRemaining;
       delete taskUpdates.startTime;
       delete taskUpdates.completedAt;
 
@@ -356,50 +354,64 @@ const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
     }
   }
 
-  // Handle task creation with timer
-  const handleCreateTask = (task: Partial<Task>) => {
-    const timeInSeconds = task.dueDate ? 
-      Math.floor((new Date(task.dueDate).getTime() - new Date().getTime()) / 1000) : 
-      0
-
-    const newTask: Task = {
-      id: crypto.randomUUID(),
-      title: task.title || '',
-      description: task.description || '',
-      dueDate: task.dueDate || new Date().toISOString(),
+  const handleCreateTask = (e: React.FormEvent) => {
+    e.preventDefault()
+    const taskToAdd = {
+      id: uuidv4(),
+      title: newTask.title,
+      description: newTask.description,
+      due_date: newTask.dueDate ? new Date(newTask.dueDate).toISOString() : null,
       completed: false,
-      priority: task.priority || 'medium',
-      timeRemaining: timeInSeconds,
-      startTime: new Date().toISOString(),
-      color: task.color || 'bg-card',
+      priority: newTask.priority || 'medium',
+      time_remaining: newTask.timeRemaining || 0,
+      start_time: null,
+      completed_at: null,
+      category: newTask.category || '',
+      color: newTask.color || 'bg-card',
+      subtasks: [],
+      progress: 0,
     }
 
-    addTask(newTask)
-    startTaskTimer(newTask.id)
+    addTask(taskToAdd)
+    setNewTask({
+      id: '',
+      title: '',
+      description: '',
+      dueDate: '',
+      completed: false,
+      priority: 'medium',
+      timeRemaining: 0,
+      startTime: null,
+      completedAt: null,
+      category: '',
+      color: 'bg-card',
+      subtasks: [],
+      progress: 0,
+    })
+    setIsDialogOpen(false)
     toast.success('Task created successfully!')
   }
 
-  // Clean up timers on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(timers).forEach(timer => clearInterval(timer))
-    }
-  }, [])
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setNewTask(prev => ({ ...prev, [name]: value }))
-  }
-
-  const handleAddTask = () => {
-    if (newTask.title.trim() === '') return
+  const handleAddTask = (e: React.FormEvent) => {
+    e.preventDefault()
     const taskToAdd = {
-      ...newTask,
-      id: editingTask ? editingTask.id : uuidv4(),
-      progress: 0,
+      id: uuidv4(),
+      title: newTask.title,
+      description: newTask.description,
+      dueDate: newTask.dueDate,
+      completed: false,
+      priority: newTask.priority,
+      timeRemaining: newTask.timeRemaining,
+      startTime: null,
+      completedAt: null,
+      category: newTask.category,
+      color: newTask.color,
+      subtasks: [],
+      progress: 0
     }
+
     if (editingTask) {
-      updateTask(taskToAdd.id, taskToAdd)
+      handleUpdateTask(taskToAdd.id, taskToAdd)
     } else {
       addTask(taskToAdd)
     }
@@ -407,17 +419,34 @@ const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
       id: '',
       title: '',
       description: '',
+      dueDate: '',
+      completed: false,
       priority: 'medium',
+      timeRemaining: 0,
+      startTime: null,
+      completedAt: null,
       category: '',
       color: 'bg-card',
-      dueDate: '',
-      timeEstimate: 0,
       subtasks: [],
-      completed: false,
-      progress: 0,
+      progress: 0
     })
-    setEditingTask(null)
     setIsDialogOpen(false)
+    toast.success(editingTask ? 'Task updated successfully!' : 'Task created successfully!')
+  }
+
+  const handleUpdateTask = (taskId: string, updates: Partial<Task>) => {
+    const updatedTask = {
+      ...updates,
+      due_date: updates.dueDate ? new Date(updates.dueDate).toISOString() : null,
+      start_time: updates.startTime ? new Date(updates.startTime).toISOString() : null,
+      completed_at: updates.completedAt ? new Date(updates.completedAt).toISOString() : null,
+    }
+    updateTask(taskId, updatedTask)
+  }
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target
+    setNewTask(prev => ({ ...prev, [name]: value }))
   }
 
   const handleDeleteTask = (id) => {
@@ -543,22 +572,37 @@ const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
   }
 
   const TaskItem = ({ task, index, moveTask }) => {
-    const ref = useRef(null)
-    const [, drop] = useDrop({
-      accept: 'task',
-      hover(item, monitor) {
-        if (!ref.current) {
-          return
-        }
-        const dragIndex = item.index
-        const hoverIndex = index
-        if (dragIndex === hoverIndex) {
-          return
-        }
-        moveTask(dragIndex, hoverIndex)
-        item.index = hoverIndex
-      },
-    })
+    const formatDate = (dateString: string | null | undefined) => {
+      if (!dateString) return '';
+      try {
+        const date = new Date(dateString);
+        return isNaN(date.getTime()) ? '' : format(date, 'PPP');
+      } catch (error) {
+        console.error('Error formatting date:', error);
+        return '';
+      }
+    };
+
+    const getTimeRemaining = (dueDate: string | null | undefined) => {
+      if (!dueDate) return '';
+      try {
+        const due = new Date(dueDate);
+        if (isNaN(due.getTime())) return '';
+        
+        const now = new Date();
+        const diff = due.getTime() - now.getTime();
+        if (diff < 0) return 'Overdue';
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        
+        if (days > 0) return `${days}d ${hours}h`;
+        return `${hours}h`;
+      } catch (error) {
+        console.error('Error calculating time remaining:', error);
+        return '';
+      }
+    };
 
     const [{ isDragging }, drag] = useDrag({
       type: 'task',
@@ -568,11 +612,19 @@ const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
       }),
     })
 
-    drag(drop(ref))
+    const [, drop] = useDrop({
+      accept: 'task',
+      hover(item: { id: string; index: number }) {
+        if (item.index !== index) {
+          moveTask(item.index, index)
+          item.index = index
+        }
+      },
+    })
 
     return (
       <div
-        ref={ref}
+        ref={(node) => drag(drop(node))}
         className={cn(
           "group relative rounded-xl border p-4 shadow-lg transition-all duration-200 hover:shadow-lg hover:translate-y-[-1px]",
           task.color || "bg-card",
@@ -630,7 +682,7 @@ const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
         {/* Footer */}
         <div className="mt-4 flex items-center justify-between text-sm">
           <div className="flex items-center space-x-4">
-            <span className="text-muted-foreground">Due {format(new Date(task.dueDate), 'PP')}</span>
+            <span className="text-muted-foreground">Due {formatDate(task.dueDate)}</span>
             <span className="text-muted-foreground">Est. {task.timeEstimate} min</span>
           </div>
           <div className="flex items-center space-x-2">
@@ -923,7 +975,7 @@ const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
                         <Button variant="ghost" onClick={() => setIsDialogOpen(false)}>
                           Cancel
                         </Button>
-                        <Button type="button" onClick={handleAddTask}>
+                        <Button type="submit" form="task-form" onClick={handleAddTask}>
                           {editingTask ? 'Save Changes' : 'Create Task'}
                         </Button>
                       </DialogFooter>
