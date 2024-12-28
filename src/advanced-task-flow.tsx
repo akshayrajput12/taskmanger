@@ -186,9 +186,20 @@ const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
 
   const addNote = async (note: Note) => {
     try {
+      const noteData = {
+        title: note.title,
+        content: note.content,
+        created_at: new Date().toISOString(),
+        color: note.color,
+        category: note.category || null,
+        priority: note.priority || null,
+        tags: note.tags || null,
+        user_id: userId
+      }
+
       const { data, error } = await supabase
         .from('notes')
-        .insert([{ ...note, user_id: userId }])
+        .insert([noteData])
         .select()
         .single()
 

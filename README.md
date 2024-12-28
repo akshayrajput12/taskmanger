@@ -54,6 +54,38 @@ While this is a public repository, it's configured to use a specific Supabase in
 3. Add tests if applicable
 4. Update documentation as needed
 
+## Deployment
+
+This app is configured for deployment on Vercel. To deploy:
+
+1. Fork this repository to your GitHub account
+2. Create a new project on Vercel
+3. Connect your GitHub repository to Vercel
+4. Add the following environment variables in Vercel:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_APP_TITLE`
+   - `VITE_APP_VERSION`
+5. Deploy! Vercel will automatically build and deploy your app
+
+The deployment configuration is already set up in `vercel.json`:
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Framework Preset: `vite`
+
+## Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```bash
+VITE_APP_TITLE=Advanced Task Flow
+VITE_APP_VERSION=1.0.0
+VITE_SUPABASE_URL=your_supabase_url_here
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+```
+
+Note: Never commit your `.env` file. Use the provided `.env.example` as a template.
+
 ## License
 
 MIT License - feel free to use this code for learning purposes!
