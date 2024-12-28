@@ -41,6 +41,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { DndProvider, useDrag, useDrop } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { cn } from "./lib/utils"
+import { supabase } from './lib/supabase'
+import { useAuth } from './contexts/AuthContext'
 
 // Simulated AI service
 const aiService = {
@@ -84,15 +86,13 @@ interface Note {
   tags?: string[]
 }
 
-export default function AdvancedTaskFlow() {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const savedTasks = localStorage.getItem("tasks")
-    return savedTasks ? JSON.parse(savedTasks) : []
-  })
-  const [notes, setNotes] = useState<Note[]>(() => {
-    const savedNotes = localStorage.getItem("notes")
-    return savedNotes ? JSON.parse(savedNotes) : []
-  })
+interface AdvancedTaskFlowProps {
+  userId: string
+}
+
+const AdvancedTaskFlow: React.FC<AdvancedTaskFlowProps> = ({ userId }) => {
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [notes, setNotes] = useState<Note[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -109,6 +109,167 @@ export default function AdvancedTaskFlow() {
   const [notesFilter, setNotesFilter] = useState<string>('all')
   const [timers, setTimers] = useState<{ [key: string]: NodeJS.Timeout }>({})
   const [showAnalytics, setShowAnalytics] = useState(false)
+
+  const { signOut } = useAuth()
+
+  useEffect(() => {
+    loadUserData()
+  }, [userId])
+
+  const loadUserData = async () => {
+    try {
+      // Load tasks
+      const { data: tasks } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+      
+      if (tasks) setTasks(tasks)
+
+      // Load notes
+      const { data: notes } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+      
+      if (notes) setNotes(notes)
+    } catch (error) {
+      console.error('Error loading user data:', error)
+      toast.error('Failed to load your data')
+    }
+  }
+
+  const addTask = async (task: Task) => {
+    try {
+      const taskData = {
+        title: task.title,
+        description: task.description,
+        due_date: task.dueDate,
+        completed: task.completed,
+        priority: task.priority,
+        time_remaining: task.timeRemaining,
+        start_time: task.startTime,
+        completed_at: task.completedAt,
+        category: task.category,
+        color: task.color,
+        subtasks: task.subtasks || [],
+        progress: task.progress,
+        user_id: userId
+      }
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([taskData])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Convert snake_case back to camelCase for the frontend
+      const formattedData = {
+        ...data,
+        dueDate: data.due_date,
+        timeRemaining: data.time_remaining,
+        startTime: data.start_time,
+        completedAt: data.completed_at,
+      }
+
+      setTasks(prev => [formattedData, ...prev])
+      toast.success('Task added successfully')
+    } catch (error) {
+      console.error('Error adding task:', error)
+      toast.error('Failed to add task')
+    }
+  }
+
+  const addNote = async (note: Note) => {
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .insert([{ ...note, user_id: userId }])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setNotes(prev => [data, ...prev])
+      toast.success('Note added successfully')
+    } catch (error) {
+      console.error('Error adding note:', error)
+      toast.error('Failed to add note')
+    }
+  }
+
+  const updateTask = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      // Convert camelCase to snake_case for the database
+      const taskUpdates = {
+        ...updates,
+        due_date: updates.dueDate,
+        time_remaining: updates.timeRemaining,
+        start_time: updates.startTime,
+        completed_at: updates.completedAt,
+      }
+
+      // Remove camelCase properties
+      delete taskUpdates.dueDate;
+      delete taskUpdates.timeRemaining;
+      delete taskUpdates.startTime;
+      delete taskUpdates.completedAt;
+
+      const { error } = await supabase
+        .from('tasks')
+        .update(taskUpdates)
+        .eq('id', taskId)
+        .eq('user_id', userId)
+
+      if (error) throw error
+
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t))
+      toast.success('Task updated successfully')
+    } catch (error) {
+      console.error('Error updating task:', error)
+      toast.error('Failed to update task')
+    }
+  }
+
+  const deleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId)
+        .eq('user_id', userId)
+
+      if (error) throw error
+
+      setTasks(prev => prev.filter(t => t.id !== taskId))
+      toast.success('Task deleted successfully')
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      toast.error('Failed to delete task')
+    }
+  }
+
+  const deleteNote = async (noteId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .delete()
+        .eq('id', noteId)
+        .eq('user_id', userId)
+
+      if (error) throw error
+
+      setNotes(prev => prev.filter(n => n.id !== noteId))
+      toast.success('Note deleted successfully')
+    } catch (error) {
+      console.error('Error deleting note:', error)
+      toast.error('Failed to delete note')
+    }
+  }
 
   const [newTask, setNewTask] = useState({
     id: '',
@@ -162,14 +323,6 @@ export default function AdvancedTaskFlow() {
     aiService.getSuggestions(tasks).then(setAiSuggestions)
   }, [tasks])
 
-  useEffect(() => {
-    localStorage.setItem("notes", JSON.stringify(notes))
-  }, [notes])
-
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks))
-  }, [tasks])
-
   // Function to update time remaining
   const updateTimeRemaining = (taskId: string) => {
     setTasks(prevTasks =>
@@ -221,7 +374,7 @@ export default function AdvancedTaskFlow() {
       color: task.color || 'bg-card',
     }
 
-    setTasks(prev => [newTask, ...prev])
+    addTask(newTask)
     startTaskTimer(newTask.id)
     toast.success('Task created successfully!')
   }
@@ -246,9 +399,9 @@ export default function AdvancedTaskFlow() {
       progress: 0,
     }
     if (editingTask) {
-      setTasks(prev => prev.map(task => task.id === editingTask.id ? taskToAdd : task))
+      updateTask(taskToAdd.id, taskToAdd)
     } else {
-      setTasks(prev => [...prev, taskToAdd])
+      addTask(taskToAdd)
     }
     setNewTask({
       id: '',
@@ -268,7 +421,7 @@ export default function AdvancedTaskFlow() {
   }
 
   const handleDeleteTask = (id) => {
-    setTasks(prev => prev.filter(task => task.id !== id))
+    deleteTask(id)
   }
 
   const handleEditTask = (task) => {
@@ -350,7 +503,7 @@ export default function AdvancedTaskFlow() {
       priority: editingNote?.priority || 'medium',
       tags: editingNote?.tags || []
     }
-    setNotes(prev => [newNote, ...prev])
+    addNote(newNote)
     setEditingNote(null)
     toast.success('Note created successfully!')
   }
@@ -362,24 +515,31 @@ export default function AdvancedTaskFlow() {
 
   const handleUpdateNote = ({ title, content }: { title: string; content: string }) => {
     if (!editingNote) return
-    setNotes(prev =>
-      prev.map((note) =>
-        note.id === editingNote.id
-          ? {
-              ...editingNote,
-              title,
-              content,
-              date: new Date().toLocaleDateString()
-            }
-          : note
-      )
-    )
+    updateNote(editingNote.id, { title, content })
     setEditingNote(null)
     toast.success('Note updated successfully!')
   }
 
   const handleDeleteNote = (id: string) => {
-    setNotes((prev) => prev.filter((note) => note.id !== id))
+    deleteNote(id)
+  }
+
+  const updateNote = async (noteId: string, updates: Partial<Note>) => {
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .update(updates)
+        .eq('id', noteId)
+        .eq('user_id', userId)
+
+      if (error) throw error
+
+      setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...updates } : n))
+      toast.success('Note updated successfully')
+    } catch (error) {
+      console.error('Error updating note:', error)
+      toast.error('Failed to update note')
+    }
   }
 
   const TaskItem = ({ task, index, moveTask }) => {
@@ -584,6 +744,18 @@ export default function AdvancedTaskFlow() {
                     <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
                     <span className="sr-only">Toggle theme</span>
                   </Switch>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={signOut}>
+                        Sign Out
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>
@@ -1326,3 +1498,5 @@ export default function AdvancedTaskFlow() {
     </DndProvider>
   )
 }
+
+export default AdvancedTaskFlow
